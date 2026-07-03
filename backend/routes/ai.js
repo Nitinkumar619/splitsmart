@@ -30,7 +30,7 @@ Return ONLY valid JSON, no markdown:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: systemPrompt + '\n\nUser input: "' + prompt + '"' }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }
+          generationConfig: { temperature: 0.1, maxOutputTokens: 2000 }
         }),
       }
     );
