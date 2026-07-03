@@ -32,7 +32,14 @@ Return ONLY this JSON, no extra text:
     if (!response.ok) return res.status(500).json({ message: data.error?.message || 'Gemini error' });
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    const clean = text.replace(/```json|```/g, '').trim();
+
+    // Extract JSON more robustly - find the first { and last }
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) {
+      return res.status(500).json({ message: 'AI did not return valid JSON' });
+    }
+    const clean = text.slice(jsonStart, jsonEnd + 1);
     const parsed = JSON.parse(clean);
     // Sanitize splitType
     if (!['equal', 'custom', 'percentage'].includes(parsed.splitType)) {
