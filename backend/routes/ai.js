@@ -34,6 +34,10 @@ Return ONLY this JSON, no extra text:
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
+    // Sanitize splitType
+    if (!['equal', 'custom', 'percentage'].includes(parsed.splitType)) {
+      parsed.splitType = 'custom';
+    }
 
     res.json({ success: true, data: parsed });
   } catch (err) {
