@@ -46,6 +46,29 @@ Return ONLY this JSON, no extra text:
       parsed.splitType = 'custom';
     }
 
+    const categoryMap = {
+    transportation: 'transport',
+    travel: 'transport',
+    cab: 'transport',
+    uber: 'transport',
+    taxi: 'transport',
+    hotel: 'accommodation',
+    lodging: 'accommodation',
+    housing: 'accommodation',
+    fun: 'entertainment',
+    movie: 'entertainment',
+    games: 'entertainment',
+    groceries: 'shopping',
+    clothes: 'shopping',
+    electricity: 'utilities',
+    water: 'utilities',
+    internet: 'utilities',
+  };
+  const validCategories = ['food', 'transport', 'accommodation', 'entertainment', 'shopping', 'utilities', 'other'];
+  if (!validCategories.includes(parsed.category)) {
+    parsed.category = categoryMap[parsed.category?.toLowerCase()] || 'other';
+  }
+  
     res.json({ success: true, data: parsed });
   } catch (err) {
     res.status(500).json({ message: 'AI parsing failed: ' + err.message });
