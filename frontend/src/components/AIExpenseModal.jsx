@@ -15,55 +15,65 @@ export default function AIExpenseModal({ group, onClose, onAdded }) {
   const { user } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [parsed, setParsed] = useState(null);
-  const [step, setStep] = useState('input'); // input | preview | saving
+  const [step, setStep] = useState('input');
   const [loading, setLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const resolveData = (data) => {
+    const memberMap = {};
+    group.members.forEach(m => {
+      memberMap[m.user.name.toLowerCase()] = m.user;
+    });
+
+    const paidByUser = Object.entries(memberMap).find(([name]) =>
+      data.paidBy?.toLowerCase().includes(name) || name.includes(data.paidBy?.toLowerCase())
+    );
+    const paidById = paidByUser ? paidByUser[1]._id : group.members[0].user._id;
+    const paidByName = paidByUser ? paidByUser[1].name : group.members[0].user.name;
+
+    const resolvedSplits = data.splits.map(split => {
+      const match = Object.entries(memberMap).find(([name]) =>
+        split.name?.toLowerCase().includes(name) || name.includes(split.name?.toLowerCase())
+      );
+      return {
+        userId: match ? match[1]._id : null,
+        name: match ? match[1].name : split.name,
+        amount: split.amount,
+      };
+    }).filter(s => s.userId);
+
+    return { ...data, paidById, paidByName, resolvedSplits };
+  };
 
   const parseExpense = async () => {
     if (!prompt.trim()) return toast.error('Describe the expense first');
     setLoading(true);
+    setRetrying(false);
+
+    const attemptParse = () => api.post('/ai/parse-expense', {
+      prompt,
+      members: group.members.map(m => ({ id: m.user._id, name: m.user.name })),
+    });
+
     try {
-      const res = await api.post('/ai/parse-expense', {
-        prompt,
-        members: group.members.map(m => ({ id: m.user._id, name: m.user.name })),
-      });
-      const data = res.data.data;
+      let res;
+      try {
+        res = await attemptParse();
+      } catch (firstErr) {
+        // Auto-retry once after 4 seconds (handles Render cold start)
+        setRetrying(true);
+        await new Promise(r => setTimeout(r, 4000));
+        setRetrying(false);
+        res = await attemptParse();
+      }
 
-      // Map names to user IDs
-      const memberMap = {};
-      group.members.forEach(m => {
-        memberMap[m.user.name.toLowerCase()] = m.user;
-      });
-
-      // Resolve paidBy
-      const paidByUser = Object.entries(memberMap).find(([name]) =>
-        data.paidBy?.toLowerCase().includes(name) || name.includes(data.paidBy?.toLowerCase())
-      );
-      const paidById = paidByUser ? paidByUser[1]._id : group.members[0].user._id;
-      const paidByName = paidByUser ? paidByUser[1].name : group.members[0].user.name;
-
-      // Resolve splits
-      const resolvedSplits = data.splits.map(split => {
-        const match = Object.entries(memberMap).find(([name]) =>
-          split.name?.toLowerCase().includes(name) || name.includes(split.name?.toLowerCase())
-        );
-        return {
-          userId: match ? match[1]._id : null,
-          name: match ? match[1].name : split.name,
-          amount: split.amount,
-        };
-      }).filter(s => s.userId);
-
-      setParsed({
-        ...data,
-        paidById,
-        paidByName,
-        resolvedSplits,
-      });
+      setParsed(resolveData(res.data.data));
       setStep('preview');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'AI parsing failed. Check your Gemini API key.');
+      toast.error(err.response?.data?.message || 'AI parsing failed. Please try again.');
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
   };
 
@@ -107,7 +117,6 @@ export default function AIExpenseModal({ group, onClose, onAdded }) {
               Describe the expense in plain English. Mention who paid, how much, and how to split.
             </p>
 
-            {/* Group members hint */}
             <div style={{ background: 'var(--bg-card2)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: 'var(--text-muted)' }}>
               Members: {group.members.map(m => m.user.name).join(', ')}
             </div>
@@ -119,7 +128,6 @@ export default function AIExpenseModal({ group, onClose, onAdded }) {
                 style={{ resize: 'vertical', lineHeight: 1.6 }} />
             </div>
 
-            {/* Examples */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Try an example:</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -143,7 +151,9 @@ export default function AIExpenseModal({ group, onClose, onAdded }) {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
               <button className="btn btn-primary" onClick={parseExpense} disabled={loading || !prompt.trim()}>
-                {loading ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Parsing...</> : <><Sparkles size={14} /> Parse with AI <ArrowRight size={14} /></>}
+                {loading
+                  ? <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> {retrying ? 'Retrying...' : 'Parsing...'}</>
+                  : <><Sparkles size={14} /> Parse with AI <ArrowRight size={14} /></>}
               </button>
             </div>
           </>

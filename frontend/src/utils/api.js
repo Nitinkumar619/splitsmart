@@ -22,5 +22,11 @@ api.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+const BACKEND_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+if (BACKEND_URL) {
+  setInterval(() => {
+    fetch(`${BACKEND_URL}/api/health`).catch(() => {});
+  }, 10 * 60 * 1000);
+}
 
 export default api;
